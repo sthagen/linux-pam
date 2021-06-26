@@ -359,23 +359,25 @@ else
 fi
 AC_SUBST(LIBAUDIT)
 
-AC_CHECK_HEADERS(xcrypt.h crypt.h)
-AS_IF([test "x$ac_cv_header_xcrypt_h" = "xyes"],
-  [crypt_libs="xcrypt crypt"],
-  [crypt_libs="crypt"])
+AC_CHECK_HEADERS(crypt.h)
 
 BACKUP_LIBS=$LIBS
-AC_SEARCH_LIBS([crypt],[$crypt_libs])
-case "$ac_cv_search_crypt" in
-	-l*) LIBCRYPT="$ac_cv_search_crypt" ;;
-	*) LIBCRYPT="" ;;
+LIBCRYPT=""
+AC_SEARCH_LIBS([crypt_gensalt_rn],[crypt])
+case "$ac_cv_search_crypt_gensalt_rn" in
+	-l*) LIBCRYPT="$ac_cv_search_crypt_gensalt_rn" ;;
+	no) AC_SEARCH_LIBS([crypt_r],[crypt])
+		case "$ac_cv_search_crypt_r" in
+		-l*) LIBCRYPT="$ac_cv_search_crypt_r" ;;
+		no ) AC_SEARCH_LIBS([crypt],[crypt])
+		case "$ac_cv_search_crypt" in
+			-l*) LIBCRYPT="$ac_cv_search_crypt" ;;
+		esac ;;
+	esac ;;
 esac
-AC_CHECK_FUNCS(crypt_r crypt_gensalt_r)
+AC_CHECK_FUNCS([crypt_r])
 LIBS=$BACKUP_LIBS
 AC_SUBST(LIBCRYPT)
-if test "$LIBCRYPT" = "-lxcrypt" && test "$ac_cv_header_xcrypt_h" = "yes" ; then
-	AC_DEFINE([HAVE_LIBXCRYPT], 1, [Define to 1 if xcrypt support should be compiled in.])
-fi
 
 AC_ARG_WITH([randomdev], AS_HELP_STRING([--with-randomdev=(<path>|yes|no)],[use specified random device instead of /dev/urandom or 'no' to disable]), opt_randomdev=$withval)
 if test "$opt_randomdev" = yes || test -z "$opt_randomdev"; then
@@ -503,6 +505,22 @@ else
   STRINGPARAM_VENDORDIR="--stringparam vendordir '<vendordir>'"
 fi
 AC_SUBST([STRINGPARAM_VENDORDIR])
+
+AC_ARG_ENABLE([openssl],
+  AS_HELP_STRING([--enable-openssl],[use OpenSSL crypto libraries]),
+  [OPENSSL_ENABLED=$enableval], OPENSSL_ENABLED=no)
+if test "$OPENSSL_ENABLED" = "yes" ; then
+  AC_CHECK_LIB([crypto], [EVP_MAC_CTX_new],
+  [CRYPTO_LIBS="-lcrypto"
+   use_openssl=yes
+   AC_DEFINE([WITH_OPENSSL], 1, [OpenSSL provides crypto algorithm for hmac])
+   STRINGPARAM_HMAC="--stringparam profile.condition 'openssl_hmac'"],
+  [CRYPTO_LIBS=""
+   STRINGPARAM_HMAC="--stringparam profile.condition 'no_openssl_hmac'"])
+fi
+AC_SUBST([CRYPTO_LIBS])
+AC_SUBST([STRINGPARAM_HMAC])
+AM_CONDITIONAL([COND_USE_OPENSSL], [test "x$use_openssl" = "xyes"])
 
 dnl Checks for header files.
 AC_HEADER_DIRENT
@@ -632,6 +650,13 @@ case "$enable_unix" in
   *) AC_MSG_ERROR([bad value $enable_unix for --enable-unix option]) ;;
 esac
 
+AC_ARG_WITH([misc-conv-bufsize],
+AS_HELP_STRING([--with-misc-conv-bufsize=<number>],
+    [Size of input buffer for libpam_misc's misc_conv() conversation function, default=4096]),
+    [],
+    [with_misc_conv_bufsize=4096])
+AC_DEFINE_UNQUOTED(PAM_MISC_CONV_BUFSIZE, $with_misc_conv_bufsize, [libpam_misc misc_conv() buffer size.])
+
 AM_CONDITIONAL([COND_BUILD_PAM_KEYINIT], [test "$have_key_syscalls" = 1])
 AM_CONDITIONAL([COND_BUILD_PAM_LASTLOG], [test "$ac_cv_func_logwtmp" = yes])
 AM_CONDITIONAL([COND_BUILD_PAM_NAMESPACE], [test "$ac_cv_func_unshare" = yes])
@@ -646,6 +671,7 @@ AM_CONDITIONAL([COND_BUILD_PAM_USERDB], [test -n "$LIBDB"])
 dnl Files to be created from when we run configure
 AC_CONFIG_FILES([Makefile libpam/Makefile libpamc/Makefile libpamc/test/Makefile \
 	libpam_misc/Makefile conf/Makefile conf/pam_conv1/Makefile \
+	libpam/pam.pc libpam_misc/pam_misc.pc libpamc/pamc.pc \
 	po/Makefile.in \
 	Make.xml.rules \
 	modules/Makefile \

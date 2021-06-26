@@ -1,4 +1,8 @@
-/*
+/* Wrapper for hmac openssl implementation.
+ *
+ * Copyright (c) 2021 Red Hat, Inc.
+ * Written by Iker Pedrosa <ipedrosa@redhat.com>
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -29,79 +33,25 @@
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
  */
+#ifndef PAM_TIMESTAMP_HMAC_OPENSSL_WRAPPER_H
+#define PAM_TIMESTAMP_HMAC_OPENSSL_WRAPPER_H
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+#include "config.h"
 
-#include <stdio.h>
-#include <unistd.h>
+#ifdef WITH_OPENSSL
 
-#include <security/pam_appl.h>
-
+#include <openssl/hmac.h>
+#include <security/pam_modules.h>
 
 int
-main (void)
-{
-  const char *service = "dummy";
-  const char *user = "root";
-  struct pam_conv conv = { NULL, NULL };
-  pam_handle_t *pamh;
-  int retval;
+hmac_size(pam_handle_t *pamh, int debug, size_t *hmac_length);
 
-  /* 1: check with valid arguments */
-  retval = pam_start (service, user, &conv, &pamh);
-  if (retval != PAM_SUCCESS)
-    {
-      fprintf (stderr, "pam_start (%s, %s, &conv, &pamh) returned %d\n",
-	       service, user, retval);
-      return 1;
-    }
-  else if (pamh == NULL)
-    {
-      fprintf (stderr,
-	       "pam_start (%s, %s, &conv, &pamh) returned NULL for pamh\n",
-	       service, user);
-      return 1;
-    }
+int
+hmac_generate(pam_handle_t *pamh, int debug, void **mac, size_t *mac_length,
+              const char *key_file, uid_t owner, gid_t group,
+              const void *text, size_t text_length);
 
-  /* 2: check with NULL for service */
-  retval = pam_start (NULL, user, &conv, &pamh);
-  if (retval == PAM_SUCCESS)
-    {
-      fprintf (stderr, "pam_start (NULL, %s, &conv, &pamh) returned %d\n",
-	       user, retval);
-      return 1;
-    }
-
-  /* 3: check with NULL for user */
-  retval = pam_start (service, NULL, &conv, &pamh);
-  if (retval != PAM_SUCCESS)
-    {
-      fprintf (stderr, "pam_start (%s, NULL, &conv, &pamh) returned %d\n",
-	       service, retval);
-      return 1;
-    }
-
-
-  /* 4: check with NULL for conv */
-  retval = pam_start (service, user, NULL, &pamh);
-  if (retval == PAM_SUCCESS)
-    {
-      fprintf (stderr, "pam_start (%s, %s, NULL, &pamh) returned %d\n",
-	       service, user, retval);
-      return 1;
-    }
-
-  /* 5: check with NULL for pamh */
-  retval = pam_start (service, user, &conv, NULL);
-  if (retval == PAM_SUCCESS)
-    {
-      fprintf (stderr, "pam_start (%s, %s, &conv, NULL) returned %d\n",
-	       service, user, retval);
-      return 1;
-    }
-
-  return 0;
-}
+#endif /* WITH_OPENSSL */
+#endif /* PAM_TIMESTAMP_HMAC_OPENSSL_WRAPPER_H */
